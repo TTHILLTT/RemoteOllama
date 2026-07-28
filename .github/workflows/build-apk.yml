@@ -117,9 +117,17 @@ jobs:
           echo "Disk space after cleanup:"
           df -h /
 
+      # ── Set Java 17 (required by Android Gradle Plugin 8.x) ──
+      - name: Configure Java
+        run: |
+          echo "JAVA_HOME=/usr/lib/jvm/temurin-17-jdk-amd64" >> $GITHUB_ENV
+          export JAVA_HOME=/usr/lib/jvm/temurin-17-jdk-amd64
+          java -version
+
       # ── Build APK ────────────────────────────────────────────
       - name: Build APK
         run: |
+          export JAVA_HOME=/usr/lib/jvm/temurin-17-jdk-amd64
           BUILD_TYPE="${{ github.event.inputs.build_type || 'debug' }}"
           if [ "$BUILD_TYPE" = "release" ]; then
             buildozer android release
