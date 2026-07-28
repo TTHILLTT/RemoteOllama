@@ -39,7 +39,9 @@ presplash_color = #1E1E2E
 android.presplash_color = #1E1E2E
 
 # Qt bootstrap (provides PySide6/QML on Android via prebuilt Qt libraries)
-p4a.branch = develop
+# Pin p4a to v2026.05.09 (last known-good version before --qt-libs regression)
+p4a.url = https://github.com/kivy/python-for-android
+p4a.commit = v2026.05.09
 p4a.bootstrap = qt
 qt.qml_imports = QtQuick,QtQuick.Controls,QtQuick.Layouts
 
