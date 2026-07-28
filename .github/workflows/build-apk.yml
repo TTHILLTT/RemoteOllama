@@ -78,6 +78,15 @@ jobs:
           restore-keys: |
             buildozer-v3-
 
+      # ── Pre-clone known-good p4a (before --qt-libs regression) ─
+      - name: Pre-clone python-for-android
+        run: |
+          P4A_COMMIT="fd72ec3a57"  # 2025-12-07: last stable qt bootstrap
+          git clone https://github.com/kivy/python-for-android /home/runner/p4a-working
+          cd /home/runner/p4a-working
+          git checkout "$P4A_COMMIT"
+          echo "Using p4a at commit: $(git log -1 --oneline)"
+
       # ── Free disk space before build ─────────────────────────
       - name: Free disk space
         run: |
