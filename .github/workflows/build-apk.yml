@@ -99,6 +99,17 @@ jobs:
           # Remove required=True (default=None in argparse already makes it optional)
           content = re.sub(r\"(--qt-libs.*?)required\s*=\s*True\", r\"\\1required=False, default=''\", content)
           content = re.sub(r\"(--load-local-libs.*?)required\s*=\s*True\", r\"\\1required=False, default=''\", content)
+
+          echo "=== Patching Gradle template to auto-include Qt JARs ==="
+          GRADLE_TMPL="pythonforandroid/bootstraps/common/build/templates/build.tmpl.gradle"
+          if [ -f "$GRADLE_TMPL" ]; then
+            # Add fileTree to automatically include all JARs from libs/ directory
+            sed -i 's/{%- for jar in jars -%}/implementation fileTree(dir: \"src\/main\/libs\", include: [\"*.jar\"])\n    {%- for jar in jars -%}/' "$GRADLE_TMPL"
+            echo "Gradle template patched"
+            grep -n "fileTree\|jar" "$GRADLE_TMPL" | head -5
+          else
+            echo "WARNING: Gradle template not found at $GRADLE_TMPL"
+          fi
           with open('$TARGET', 'w') as f:
               f.write(content)
           print('Patched successfully')
