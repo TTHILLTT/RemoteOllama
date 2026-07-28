@@ -1,0 +1,150 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'README.md'
+      - 'DESIGN.md'
+      - '.gitignore'
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'APK build type'
+        required: true
+        type: choice
+        default: 'debug'
+        options:
+          - debug
+          - release
+
+jobs:
+  build:
+    name: Build APK (${{ github.event.inputs.build_type || 'debug' }})
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # ── System dependencies for buildozer / p4a ──────────────
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            autoconf \
+            automake \
+            libtool \
+            libltdl-dev \
+            libffi-dev \
+            libssl-dev \
+            libncurses5-dev \
+            libncursesw5-dev \
+            libsqlite3-dev \
+            cmake \
+            zip \
+            unzip \
+            openjdk-17-jdk-headless \
+            git \
+            wget \
+            ccache \
+            libz-dev \
+            libbz2-dev \
+            libreadline-dev \
+            libgdbm-dev \
+            xz-utils
+
+      # ── Android SDK and NDK are managed by buildozer itself ──
+
+      - name: Install buildozer
+        run: |
+          pip install --upgrade pip setuptools wheel
+          pip install buildozer Cython virtualenv
+
+      # ── Cache ~/.buildozer for SDK/NDK reuse ─────────────────
+      - name: Cache buildozer data
+        uses: actions/cache@v4
+        with:
+          path: ~/.buildozer
+          key: buildozer-v3-${{ hashFiles('buildozer.spec') }}
+          restore-keys: |
+            buildozer-v3-
+
+      # ── Free disk space before build ─────────────────────────
+      - name: Free disk space
+        run: |
+          echo "Disk space before cleanup:"
+          df -h /
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup 2>/dev/null || true
+          sudo rm -rf /usr/local/share/chromium /usr/local/share/powershell 2>/dev/null || true
+          echo "Disk space after cleanup:"
+          df -h /
+
+      # ── Build APK ────────────────────────────────────────────
+      - name: Build APK
+        run: |
+          BUILD_TYPE="${{ github.event.inputs.build_type || 'debug' }}"
+          if [ "$BUILD_TYPE" = "release" ]; then
+            buildozer android release
+          else
+            buildozer android debug
+          fi
+
+      # ── Find and prepare APK ─────────────────────────────────
+      - name: Collect APK artifacts
+        id: collect
+        run: |
+          mkdir -p apk-output
+          # Find debug APK
+          find . -name "*.apk" -type f -exec cp -v {} apk-output/ \;
+          # List collected files
+          echo "APK files found:"
+          ls -lh apk-output/
+
+          # Set output for artifact name
+          APK_COUNT=$(ls apk-output/*.apk 2>/dev/null | wc -l)
+          if [ "$APK_COUNT" -eq 0 ]; then
+            echo "WARNING: No APK files found!"
+            echo "Searching for bin directory..."
+            find . -name "bin" -type d
+            find . -name "*.apk" -type f
+          fi
+          echo "apk_count=${APK_COUNT}" >> $GITHUB_OUTPUT
+
+      # ── Upload APK as workflow artifact ──────────────────────
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: RemoteOllama-APK
+          path: apk-output/*.apk
+          retention-days: 30
+          compression-level: 0  # APK is already compressed
+
+      # ── Summary ──────────────────────────────────────────────
+      - name: Build summary
+        if: always()
+        run: |
+          echo "## Build Result" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          APK_COUNT=$(ls apk-output/*.apk 2>/dev/null | wc -l || echo 0)
+          if [ "$APK_COUNT" -gt 0 ]; then
+            echo "✅ **APK built successfully!**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Download the APK from the **Artifacts** section below." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            ls -lh apk-output/*.apk | while read line; do
+              echo "- $line" >> $GITHUB_STEP_SUMMARY
+            done
+          else
+            echo "❌ **Build failed — no APK produced.**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Check the build logs above for errors." >> $GITHUB_STEP_SUMMARY
+          fi
