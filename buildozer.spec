@@ -13,7 +13,7 @@ version = 1.0.0
 
 # Python requirements (recipes from python-for-android)
 # sqlite3 is built-in, no need to list
-requirements = python3,hostpython3,requests,markdown
+requirements = python3,hostpython3,pyside6,requests,markdown
 
 # Permissions
 android.permissions = INTERNET,ACCESS_NETWORK_STATE
