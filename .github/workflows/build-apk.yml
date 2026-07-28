@@ -84,19 +84,22 @@ jobs:
           git clone --depth=1 https://github.com/kivy/python-for-android /home/runner/p4a-working
           cd /home/runner/p4a-working
           echo "P4A before patch: $(git log -1 --oneline)"
-          # Patch --qt-libs and --load-local-libs to be optional
-          python3 << 'PYEOF'
-          path = 'pythonforandroid/toolchain.py'
-          with open(path) as f:
-              content = f.read()
-          content = content.replace("'--qt-libs', required=True", "'--qt-libs', required=False, default=''")
-          content = content.replace("'--load-local-libs', required=True", "'--load-local-libs', required=False, default=''")
-          content = content.replace('"--qt-libs", required=True', '"--qt-libs", required=False, default=""')
-          content = content.replace('"--load-local-libs", required=True', '"--load-local-libs", required=False, default=""')
-          with open(path, 'w') as f:
-              f.write(content)
-          print('Patched p4a toolchain')
-          PYEOF
+          # Patch --qt-libs and --load-local-libs to be optional across ALL files
+          # The args are defined in bootstraps/common/build/build.py, not toolchain.py
+          grep -rl "required.*qt_libs\|qt_libs.*required\|required.*load_local\|load_local.*required" . 2>/dev/null | while read f; do
+            echo "Patching: $f"
+            sed -i "s/'--qt-libs', required=True/'--qt-libs', required=False, default=''/g" "$f"
+            sed -i "s/'--qt-libs', required = True/'--qt-libs', required=False, default=''/g" "$f"
+            sed -i "s/'--load-local-libs', required=True/'--load-local-libs', required=False, default=''/g" "$f"
+            sed -i "s/'--load-local-libs', required = True/'--load-local-libs', required=False, default=''/g" "$f"
+            sed -i 's/"--qt-libs", required=True/"--qt-libs", required=False, default=""/g' "$f"
+            sed -i 's/"--qt-libs", required = True/"--qt-libs", required=False, default=""/g' "$f"
+            sed -i 's/"--load-local-libs", required=True/"--load-local-libs", required=False, default=""/g' "$f"
+            sed -i 's/"--load-local-libs", required = True/"--load-local-libs", required=False, default=""/g' "$f"
+          done
+          # Verify patches applied
+          grep -rn "qt_libs\|load_local" . --include="*.py" | grep -i required | head -5 || echo "No remaining required qt-libs/load-local-libs found"
+          echo "Patch complete"
 
       # ── Free disk space before build ─────────────────────────
       - name: Free disk space
