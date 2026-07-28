@@ -84,21 +84,28 @@ jobs:
           git clone --depth=1 https://github.com/kivy/python-for-android /home/runner/p4a-working
           cd /home/runner/p4a-working
           echo "P4A before patch: $(git log -1 --oneline)"
-          # Patch --qt-libs and --load-local-libs to be optional across ALL files
-          # The args are defined in bootstraps/common/build/build.py, not toolchain.py
-          grep -rl "required.*qt_libs\|qt_libs.*required\|required.*load_local\|load_local.*required" . 2>/dev/null | while read f; do
-            echo "Patching: $f"
-            sed -i "s/'--qt-libs', required=True/'--qt-libs', required=False, default=''/g" "$f"
-            sed -i "s/'--qt-libs', required = True/'--qt-libs', required=False, default=''/g" "$f"
-            sed -i "s/'--load-local-libs', required=True/'--load-local-libs', required=False, default=''/g" "$f"
-            sed -i "s/'--load-local-libs', required = True/'--load-local-libs', required=False, default=''/g" "$f"
-            sed -i 's/"--qt-libs", required=True/"--qt-libs", required=False, default=""/g' "$f"
-            sed -i 's/"--qt-libs", required = True/"--qt-libs", required=False, default=""/g' "$f"
-            sed -i 's/"--load-local-libs", required=True/"--load-local-libs", required=False, default=""/g' "$f"
-            sed -i 's/"--load-local-libs", required = True/"--load-local-libs", required=False, default=""/g' "$f"
-          done
-          # Verify patches applied
-          grep -rn "qt_libs\|load_local" . --include="*.py" | grep -i required | head -5 || echo "No remaining required qt-libs/load-local-libs found"
+          # The --qt-libs and --load-local-libs required args are defined in:
+          #   pythonforandroid/bootstraps/common/build/build.py
+          TARGET="pythonforandroid/bootstraps/common/build/build.py"
+          echo "Target file exists: $(test -f "$TARGET" && echo YES || echo NO)"
+          echo "Before patch (grep for required):"
+          grep -n "required.*qt_libs\|load_local.*required\|qt_libs\|load_local" "$TARGET" | head -10 || echo "(none found)"
+          # Use Python for reliable multi-pattern replacement
+          python3 -c "
+          import re
+          with open('$TARGET') as f:
+              content = f.read()
+          # Replace required=True with required=False, default='' for these specific args
+          content = re.sub(r\"'--qt-libs',\s*required\s*=\s*True\", \"'--qt-libs', required=False, default=''\", content)
+          content = re.sub(r\"'--load-local-libs',\s*required\s*=\s*True\", \"'--load-local-libs', required=False, default=''\", content)
+          content = re.sub(r'\"--qt-libs\",\s*required\s*=\s*True', '\"--qt-libs\", required=False, default=\"\"', content)
+          content = re.sub(r'\"--load-local-libs\",\s*required\s*=\s*True', '\"--load-local-libs\", required=False, default=\"\"', content)
+          with open('$TARGET', 'w') as f:
+              f.write(content)
+          print('Patched successfully')
+          "
+          echo "After patch (grep for required):"
+          grep -n "required.*qt_libs\|load_local.*required" "$TARGET" || echo "All required=True removed!"
           echo "Patch complete"
 
       # ── Free disk space before build ─────────────────────────
