@@ -28,12 +28,10 @@ android.accept_sdk_license = True
 
 # Build settings
 android.arch = arm64-v8a
-android.gradle_dependencies =
 
-# App settings
-orientation = sensor
+# App display
+orientation = all
 fullscreen = 0
-window = 1
 presplash_color = #1E1E2E
 android.presplash_color = #1E1E2E
 
