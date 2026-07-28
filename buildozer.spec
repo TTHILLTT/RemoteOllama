@@ -31,7 +31,7 @@ android.arch = arm64-v8a
 android.gradle_dependencies =
 
 # App settings
-orientation = user
+orientation = sensor
 fullscreen = 0
 window = 1
 presplash_color = #1E1E2E
