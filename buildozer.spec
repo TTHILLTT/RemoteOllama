@@ -39,8 +39,8 @@ presplash_color = #1E1E2E
 android.presplash_color = #1E1E2E
 
 # Qt bootstrap (provides PySide6/QML on Android via prebuilt Qt libraries)
-# p4a is pre-cloned in CI workflow at a known-good commit
-# (predates --qt-libs regression in qt bootstrap)
+# p4a is pre-cloned & patched in CI workflow
+# (develop branch with --qt-libs/--load-local-libs patched to optional)
 p4a.source_dir = /home/runner/p4a-working
 p4a.bootstrap = qt
 qt.qml_imports = QtQuick,QtQuick.Controls,QtQuick.Layouts
