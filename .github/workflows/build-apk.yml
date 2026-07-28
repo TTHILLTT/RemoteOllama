@@ -89,17 +89,16 @@ jobs:
           TARGET="pythonforandroid/bootstraps/common/build/build.py"
           echo "Target file exists: $(test -f "$TARGET" && echo YES || echo NO)"
           echo "Before patch (grep for required):"
-          grep -n "required.*qt_libs\|load_local.*required\|qt_libs\|load_local" "$TARGET" | head -10 || echo "(none found)"
+          grep -n -E "qt_libs|load_local" "$TARGET" | head -10 || echo "(none found)"
           # Use Python for reliable multi-pattern replacement
           python3 -c "
           import re
           with open('$TARGET') as f:
               content = f.read()
-          # Replace required=True with required=False, default='' for these specific args
-          content = re.sub(r\"'--qt-libs',\s*required\s*=\s*True\", \"'--qt-libs', required=False, default=''\", content)
-          content = re.sub(r\"'--load-local-libs',\s*required\s*=\s*True\", \"'--load-local-libs', required=False, default=''\", content)
-          content = re.sub(r'\"--qt-libs\",\s*required\s*=\s*True', '\"--qt-libs\", required=False, default=\"\"', content)
-          content = re.sub(r'\"--load-local-libs\",\s*required\s*=\s*True', '\"--load-local-libs\", required=False, default=\"\"', content)
+          # Format: ap.add_argument('--qt-libs', dest='qt_libs', required=True,
+          # Remove required=True (default=None in argparse already makes it optional)
+          content = re.sub(r\"(--qt-libs.*?)required\s*=\s*True\", r\"\\1required=False, default=''\", content)
+          content = re.sub(r\"(--load-local-libs.*?)required\s*=\s*True\", r\"\\1required=False, default=''\", content)
           with open('$TARGET', 'w') as f:
               f.write(content)
           print('Patched successfully')
