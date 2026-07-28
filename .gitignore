@@ -1,0 +1,58 @@
+# Git ignore for RemoteOllama
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+eggs/
+*.egg
+.eggs/
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# PyInstaller
+*.spec.bak
+
+# Buildozer (Android)
+.buildozer/
+bin/
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Application data (generated at runtime)
+config.json
+*.db
+*.db-wal
+*.db-shm
+
+# Logs
+*.log
+logs/
+
+# Environment
+.env
+.env.local

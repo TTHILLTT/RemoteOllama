@@ -1,0 +1,23 @@
+# RemoteOllama Dependencies
+# Core: Qt/QML UI framework
+PySide6>=6.5.0,<7.0.0
+PySide6-Essentials>=6.5.0
+
+# HTTP client (sync for threading, async for future asyncio support)
+httpx>=0.25.0
+httpcore>=1.0.0
+
+# Markdown to HTML rendering
+markdown>=3.5.0
+Pygments>=2.17.0  # Code syntax highlighting
+
+# Testing
+pytest>=8.0.0
+pytest-qt>=4.4.0  # Qt testing utilities
+
+# Optional: LaTeX rendering
+# matplotlib>=3.8.0  # Uncomment for LaTeX formula support
+
+# Packaging (development only)
+# pyinstaller>=6.0.0
+# buildozer>=1.5.0  # Android only

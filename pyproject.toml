@@ -1,0 +1,62 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "RemoteOllama"
+version = "1.0.0"
+description = "Cross-platform AI Chat Client for Ollama"
+authors = [
+    {name = "RemoteOllama Team"}
+]
+license = {text = "MIT"}
+readme = "DESIGN.md"
+requires-python = ">=3.10"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: X11 Applications :: Qt",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Communications :: Chat",
+]
+dependencies = [
+    "PySide6>=6.5.0,<7.0.0",
+    "httpx>=0.25.0",
+    "markdown>=3.5.0",
+    "Pygments>=2.17.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-qt>=4.4.0",
+]
+android = [
+    "buildozer>=1.5.0",
+]
+
+[project.scripts]
+remoteollama = "app.main:main"
+
+[project.urls]
+Homepage = "https://github.com/example/remoteollama"
+Documentation = "https://github.com/example/remoteollama/blob/main/DESIGN.md"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-v --tb=short"
+
+[tool.pyright]
+typeCheckingMode = "basic"
+pythonVersion = "3.10"
+reportMissingTypeStubs = false
+reportUnknownMemberType = false
