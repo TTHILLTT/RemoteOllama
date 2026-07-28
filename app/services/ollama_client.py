@@ -1,15 +1,17 @@
 """HTTP client for Ollama server API.
 
 Implements the official Ollama REST API with streaming support.
-Uses httpx for async HTTP with connection pooling and timeout handling.
+Uses requests (not httpx) for compatibility with python-for-android (p4a).
 
 API reference: https://docs.ollama.com/api/
 """
 
 import json
-from typing import Any, Callable, Generator, List, Optional
+from typing import Any, Generator, List, Optional
 
-import httpx
+import requests
+from requests.exceptions import ConnectionError as RequestsConnectionError
+from requests.exceptions import HTTPError, Timeout as RequestsTimeout
 
 from ..models.model_info import ModelInfo
 from ..utils.logger import get_logger
@@ -53,10 +55,13 @@ class OllamaClient:
     - Server version (GET /api/version)
     - Model details (POST /api/show)
 
+    Uses requests.Session for connection pooling. Compatible with
+    both desktop (Windows/Linux) and Android (via p4a).
+
     Attributes:
         base_url: Ollama server base URL.
         timeout: Request timeout in seconds.
-        _client: httpx Client instance (lazy-initialized).
+        _session: requests Session instance (lazy-initialized).
     """
 
     def __init__(self, base_url: str = "http://localhost:11434", timeout: int = 60) -> None:
@@ -68,22 +73,27 @@ class OllamaClient:
         """
         self.base_url: str = base_url.rstrip("/")
         self.timeout: int = timeout
-        self._client: Optional[httpx.Client] = None
-        self._current_request: Optional[httpx.Response] = None
+        self._session: Optional[requests.Session] = None
+        self._current_response: Optional[requests.Response] = None
 
     @property
-    def client(self) -> httpx.Client:
-        """Get or create an httpx Client with connection pooling.
+    def session(self) -> requests.Session:
+        """Get or create a requests Session with connection pooling.
 
         Returns:
-            Configured httpx.Client instance.
+            Configured requests.Session instance.
         """
-        if self._client is None:
-            self._client = httpx.Client(
-                timeout=httpx.Timeout(self.timeout),
-                limits=httpx.Limits(max_keepalive_connections=5, max_connections=10),
+        if self._session is None:
+            self._session = requests.Session()
+            # Connection pool settings
+            adapter = requests.adapters.HTTPAdapter(
+                pool_connections=5,
+                pool_maxsize=10,
+                max_retries=0,  # We handle retries ourselves
             )
-        return self._client
+            self._session.mount("http://", adapter)
+            self._session.mount("https://", adapter)
+        return self._session
 
     def _request(
         self,
@@ -91,7 +101,7 @@ class OllamaClient:
         path: str,
         json_data: Optional[dict] = None,
         stream: bool = False,
-    ) -> httpx.Response:
+    ) -> requests.Response:
         """Make an HTTP request to the Ollama server.
 
         Args:
@@ -101,7 +111,7 @@ class OllamaClient:
             stream: Whether to stream the response.
 
         Returns:
-            httpx Response object.
+            requests Response object.
 
         Raises:
             OllamaConnectionError: Server unreachable.
@@ -112,40 +122,45 @@ class OllamaClient:
         logger.debug("%s %s", method, url)
 
         try:
-            response = self.client.request(
+            response = self.session.request(
                 method=method,
                 url=url,
                 json=json_data,
+                stream=stream,
+                timeout=(3.05, self.timeout),  # (connect_timeout, read_timeout)
             )
-            # Store reference for cancellation
-            if stream:
-                self._current_request = response
 
-            # Check for HTTP errors (non-streaming)
+            # Store reference for cancellation (streaming mode)
+            if stream:
+                self._current_response = response
+
+            # Check for HTTP errors (non-streaming mode)
             if not stream:
                 self._raise_for_status(response)
 
             return response
-        except httpx.ConnectError as e:
+
+        except RequestsConnectionError as e:
             raise OllamaConnectionError(
                 f"Cannot connect to Ollama server at {self.base_url}. "
                 f"Is the server running?"
             ) from e
-        except httpx.TimeoutException as e:
+        except RequestsTimeout as e:
             raise OllamaTimeoutError(
                 f"Request to {path} timed out after {self.timeout}s"
             ) from e
-        except httpx.HTTPStatusError as e:
+        except HTTPError as e:
+            status_code = e.response.status_code if e.response is not None else None
             raise OllamaError(
-                f"API error: {e.response.status_code} - {e.response.text}",
-                status_code=e.response.status_code,
+                f"API error: {e}",
+                status_code=status_code,
             ) from e
 
-    def _raise_for_status(self, response: httpx.Response) -> None:
+    def _raise_for_status(self, response: requests.Response) -> None:
         """Check response status and raise on error.
 
         Args:
-            response: httpx Response to check.
+            response: requests Response to check.
 
         Raises:
             OllamaError: On HTTP error status.
@@ -153,7 +168,7 @@ class OllamaClient:
         if response.status_code >= 400:
             try:
                 detail = response.json().get("error", response.text)
-            except (json.JSONDecodeError, AttributeError):
+            except (json.JSONDecodeError, AttributeError, ValueError):
                 detail = response.text
             raise OllamaError(
                 f"API error ({response.status_code}): {detail}",
@@ -212,12 +227,15 @@ class OllamaClient:
         if options:
             payload["options"] = options
 
-        logger.info("Chat request: model=%s, messages=%d, stream=%s", model, len(messages), stream)
+        logger.info(
+            "Chat request: model=%s, messages=%d, stream=%s",
+            model, len(messages), stream,
+        )
 
         if stream:
             response = self._request("POST", "/api/chat", json_data=payload, stream=True)
             try:
-                for line in response.iter_lines():
+                for line in response.iter_lines(decode_unicode=True):
                     if line:
                         try:
                             chunk = json.loads(line)
@@ -231,13 +249,18 @@ class OllamaClient:
                             continue
             finally:
                 response.close()
-                self._current_request = None
+                self._current_response = None
         else:
             response = self._request("POST", "/api/chat", json_data=payload)
             data = response.json()
             yield data
 
-    def generate(self, model: str, prompt: str, options: Optional[dict] = None) -> str:
+    def generate(
+        self,
+        model: str,
+        prompt: str,
+        options: Optional[dict] = None,
+    ) -> str:
         """Send a single generate request (non-streaming).
 
         Calls POST /api/generate for simple text completion.
@@ -271,14 +294,14 @@ class OllamaClient:
 
         Closes the underlying HTTP connection to stop generation.
         """
-        if self._current_request is not None:
+        if self._current_response is not None:
             logger.info("Stopping current generation")
             try:
-                self._current_request.close()
+                self._current_response.close()
             except Exception as e:
                 logger.warning("Error stopping request: %s", e)
             finally:
-                self._current_request = None
+                self._current_response = None
 
     def health(self) -> bool:
         """Check if the Ollama server is reachable.
@@ -327,8 +350,8 @@ class OllamaClient:
         return response.json()
 
     def close(self) -> None:
-        """Close the underlying HTTP client and release connections."""
-        if self._client is not None:
-            self._client.close()
-            self._client = None
-            logger.debug("HTTP client closed")
+        """Close the underlying HTTP session and release connections."""
+        if self._session is not None:
+            self._session.close()
+            self._session = None
+            logger.debug("HTTP session closed")

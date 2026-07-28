@@ -1,13 +1,14 @@
 """Unit tests for OllamaClient.
 
-Uses httpx's mock transport to simulate server responses.
+Uses requests' mock transport to simulate server responses.
 """
 
 import json
 from unittest.mock import MagicMock, patch
 
-import httpx
 import pytest
+from requests.exceptions import ConnectionError as RequestsConnectionError
+from requests.exceptions import Timeout as RequestsTimeout
 
 from app.services.ollama_client import (
     OllamaClient,
@@ -35,7 +36,7 @@ class TestOllamaClient:
         client = OllamaClient(base_url="http://test-server:11434/")
         assert client.base_url == "http://test-server:11434"
 
-    @patch("httpx.Client.request")
+    @patch("requests.Session.request")
     def test_health_check_success(self, mock_request, client):
         """Test health check when server responds OK."""
         mock_response = MagicMock()
@@ -44,14 +45,14 @@ class TestOllamaClient:
 
         assert client.health() is True
 
-    @patch("httpx.Client.request")
+    @patch("requests.Session.request")
     def test_health_check_failure(self, mock_request, client):
         """Test health check when server is unreachable."""
-        mock_request.side_effect = httpx.ConnectError("Connection refused")
+        mock_request.side_effect = RequestsConnectionError("Connection refused")
 
         assert client.health() is False
 
-    @patch("httpx.Client.request")
+    @patch("requests.Session.request")
     def test_list_models(self, mock_request, client):
         """Test listing models from /api/tags."""
         mock_response = MagicMock()
@@ -80,7 +81,7 @@ class TestOllamaClient:
         assert models[0].size == 8544883829
         assert models[0].digest == "abc123def456"
 
-    @patch("httpx.Client.request")
+    @patch("requests.Session.request")
     def test_list_models_empty(self, mock_request, client):
         """Test listing models when server has none."""
         mock_response = MagicMock()
@@ -91,7 +92,7 @@ class TestOllamaClient:
         models = client.list_models()
         assert len(models) == 0
 
-    @patch("httpx.Client.request")
+    @patch("requests.Session.request")
     def test_version(self, mock_request, client):
         """Test getting server version."""
         mock_response = MagicMock()
@@ -102,26 +103,25 @@ class TestOllamaClient:
         version = client.version()
         assert version == "0.3.0"
 
-    @patch("httpx.Client.request")
+    @patch("requests.Session.request")
     def test_connection_error(self, mock_request, client):
         """Test connection error is properly wrapped."""
-        mock_request.side_effect = httpx.ConnectError("No route to host")
+        mock_request.side_effect = RequestsConnectionError("No route to host")
 
         with pytest.raises(OllamaConnectionError, match="Cannot connect"):
             client.list_models()
 
-    @patch("httpx.Client.request")
+    @patch("requests.Session.request")
     def test_timeout_error(self, mock_request, client):
         """Test timeout error is properly wrapped."""
-        mock_request.side_effect = httpx.TimeoutException("Request timed out")
+        mock_request.side_effect = RequestsTimeout("Request timed out")
 
         with pytest.raises(OllamaTimeoutError, match="timed out"):
             client.list_models()
 
-    @patch("httpx.Client.request")
+    @patch("requests.Session.request")
     def test_chat_streaming(self, mock_request, client):
         """Test streaming chat response."""
-        # Simulate streaming with iter_lines
         chunks = [
             '{"model":"qwen3","message":{"role":"assistant","content":"Hello"},"done":false}',
             '{"model":"qwen3","message":{"role":"assistant","content":" world"},"done":false}',
@@ -141,7 +141,7 @@ class TestOllamaClient:
         assert result[0]["message"]["content"] == "Hello"
         assert result[3]["done"] is True
 
-    @patch("httpx.Client.request")
+    @patch("requests.Session.request")
     def test_chat_non_streaming(self, mock_request, client):
         """Test non-streaming chat response."""
         mock_response = MagicMock()
@@ -161,10 +161,10 @@ class TestOllamaClient:
 
     def test_close(self, client):
         """Test client close releases resources."""
-        # Force client creation
-        _ = client.client
+        # Force session creation
+        _ = client.session
         client.close()
-        assert client._client is None
+        assert client._session is None
 
 
 class TestModelInfo:
